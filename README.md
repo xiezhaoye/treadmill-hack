@@ -85,11 +85,12 @@ treadmill-hack/
 │   ├── parse-btsnoop.py         ← btsnoop 解析器（ATT/GATT 专用）
 │   ├── pull-btsnoop.sh          ← 一键拉取手机抓包
 │   ├── ftms.py                  ← FTMS 指令构造（Python）
-│   └── scan-gatt.py             ← 扫描并打印 GATT 树
+│   └── analyze-frames.py        ← 分析数据帧，找出累计时间/距离字段
 ├── android/
 │   └── app/...                  ← BLE Relay App 源码（Kotlin/Java）
 └── esphome/
-    └── treadmill.yaml           ← ESP32 + ESPHome 配置（长期方案）
+    ├── treadmill.yaml           ← ESP32 + ESPHome 基础配置（控制 + 读数）
+    └── auto-session.yaml        ← ★ 自动记录状态机（免操作，跑完自动存+通知）
 ```
 
 ---
@@ -207,6 +208,36 @@ Home Assistant ──WiFi── ESP32 ──BLE── 跑步机
 成本：约 ¥50（ESP32-S3 开发板）
 
 配置见 [esphome/treadmill.yaml](esphome/treadmill.yaml)。
+
+---
+
+## 自动记录（免操作）
+
+**问题**：跑步机本身**不存历史**。断电就清零，FTMS 协议里也没有历史记录字段。
+
+厂商 App 的记录是**上传到服务器**的，你换账号/厂商关服就没了。
+
+**解法**：用 ESP32 常驻监听，自动识别跑步会话。
+
+```
+跑步机静止时也在推送数据（每秒 2.2 帧）
+         ↓
+ESP32 监控速度字段
+         ↓
+速度 0 → 非0（持续 3 秒）  = 会话开始
+速度 非0 → 0（持续 60 秒） = 会话结束
+         ↓
+结算：时长 / 距离 / 均速 / 最高速 / 坡度范围
+         ↓
+Home Assistant 自动存库 + 手机推送通知
+```
+
+**用户完全不需要任何操作**——按跑步机按钮开始跑，跑完自动记录。
+
+配置见 [esphome/auto-session.yaml](esphome/auto-session.yaml)。
+
+> ⚠️ 距离计算目前用「速度×时间」积分近似（帧内累计距离的字节偏移尚未完全验证）。
+> 精确标定方法见 [tools/analyze-frames.py](tools/analyze-frames.py)。
 
 ---
 

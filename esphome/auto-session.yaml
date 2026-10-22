@@ -1,0 +1,318 @@
+# ============================================================================
+# 跑步机自动记录 —— 会话状态机
+#
+# 设计目标：用户什么都不用做。按跑步机按钮开始跑，跑完自动记录并通知。
+#
+# 原理：
+#   跑步机静止时也在推送 2ACD 数据（每秒 ~2.2 帧）
+#   → 监控速度字段
+#   → 速度 0 → 非0（持续 3 秒）= 会话开始
+#   → 速度 非0 → 0（持续 60 秒）= 会话结束
+#   → 结束时结算差值，发布到 Home Assistant
+#
+# ⚠️ 重要说明（实测局限）：
+#   2ACD 帧里「累计距离/时间」的确切字节偏移**尚未完全验证**。
+#   本文件用「速度 × 时间」积分来估算距离，是**近似值**。
+#
+#   要做到精确，需要先做一次标定实验：
+#     1. 跑固定 1.0 km（跑步机屏幕显示）
+#     2. 同时抓帧，对比哪个字段变化量 = 1000（米）或 = 时间秒数
+#     3. 把确认的偏移填进下面的 parse 函数
+#
+#   工具：tools/analyze-frames.py 可以帮你找出哪些字段在递增。
+#
+# 用法：把本文件内容合并进 treadmill.yaml，或作为 package 引用：
+#   packages:
+#     auto_session: !include auto-session.yaml
+# ============================================================================
+
+globals:
+  # ---- 会话状态机 ----
+  # 0 = IDLE（空闲）, 1 = RUNNING（跑步中）, 2 = PAUSED（暂停中）
+  - id: session_state
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+  # 速度连续 > 阈值的时长（毫秒），用于确认"真的开始了"
+  - id: moving_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+
+  # 速度连续 = 0 的时长（毫秒），用于判断"是否真的结束了"
+  - id: idle_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+
+  # ---- 会话快照（会话开始时的累计值）----
+  - id: snap_time
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: snap_dist
+    type: float
+    restore_value: false
+    initial_value: "0.0"
+
+  # ---- 会话统计 ----
+  - id: sess_start_epoch
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: sess_duration_s
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: sess_distance_km
+    type: float
+    restore_value: false
+    initial_value: "0.0"
+  - id: sess_max_speed
+    type: float
+    restore_value: false
+    initial_value: "0.0"
+  - id: sess_speed_sum
+    type: float
+    restore_value: false
+    initial_value: "0.0"
+  - id: sess_speed_cnt
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+  - id: sess_incline_min
+    type: float
+    restore_value: false
+    initial_value: "99.0"
+  - id: sess_incline_max
+    type: float
+    restore_value: false
+    initial_value: "-99.0"
+
+  # ---- 上次处理的数据帧时间（防重复处理同一帧）----
+  - id: last_frame_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+
+# ---------------------------------------------------------------------------
+# 传感器：实时值 + 会话结果
+# ---------------------------------------------------------------------------
+sensor:
+  - platform: template
+    name: "跑步机 会话时长"
+    id: sess_duration
+    icon: mdi:timer-outline
+    unit_of_measurement: "min"
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "跑步机 会话距离"
+    id: sess_distance
+    icon: mdi:map-marker-distance
+    unit_of_measurement: "km"
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "跑步机 会话平均速度"
+    id: sess_avg_speed
+    icon: mdi:speedometer
+    unit_of_measurement: "km/h"
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "跑步机 会话最高速度"
+    id: sess_max_speed_sensor
+    icon: mdi:speedometer
+    unit_of_measurement: "km/h"
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "跑步机 会话坡度范围"
+    id: sess_incline_range
+    icon: mdi:slope-uphill
+    unit_of_measurement: "%"
+    update_interval: never
+
+# ---------------------------------------------------------------------------
+# 文本传感器：上一次会话摘要（用于通知和看板）
+# ---------------------------------------------------------------------------
+text_sensor:
+  - platform: template
+    name: "跑步机 上次会话摘要"
+    id: sess_summary
+    icon: mdi:text-box-outline
+    update_interval: never
+
+  - platform: template
+    name: "跑步机 会话状态"
+    id: sess_state_text
+    icon: mdi:state-machine
+    update_interval: 2s
+    lambda: |-
+      switch (id(session_state)) {
+        case 1: return std::string("跑步中");
+        case 2: return std::string("暂停中");
+        default: return std::string("空闲");
+      }
+
+# ---------------------------------------------------------------------------
+# ★ 核心：状态机（每收到一帧 2ACD 数据就调用一次）
+#
+# 把 lambda 挂到 2ACD 的 on_value 上（treadmill.yaml 里已有该 sensor，
+# 这里提供要插入的完整处理逻辑）
+# ---------------------------------------------------------------------------
+script:
+  - id: process_frame
+    mode: queued
+    then:
+      - lambda: |-
+          // ============ 参数 ============
+          const float SPEED_THRESHOLD = 0.3f;    // km/h，低于此值视为静止
+          const uint32_t START_CONFIRM_MS  = 3000;   // 持续 3 秒才认定开始
+          const uint32_t END_CONFIRM_MS    = 60000;  // 持续 60 秒才认定结束
+          const uint32_t FRAME_GAP_MS      = 200;    // 两帧间隔（实测 ~450ms）
+
+          // ============ 防重复处理 ============
+          uint32_t now = millis();
+          if (now - id(last_frame_ms) < FRAME_GAP_MS / 2) return;
+          id(last_frame_ms) = now;
+
+          // ============ 从 2ACD 帧解析 ============
+          // 帧格式（YPOO M5 实测，其他机型需重新核对）：
+          //   9c25 <speed:2 小端 ÷100> <incline:2 小端 ÷10> ...
+          // 注意：本 lambda 用全局变量 id(raw_speed) / id(raw_incline)
+          //      由 on_value lambda 提前赋值，避免重复解析
+          float spd = id(tm_speed_kmh);
+          float inc = id(tm_incline_pct);
+
+          // ============ 状态机 ============
+          if (spd > SPEED_THRESHOLD) {
+            // ---- 有速度 ----
+            id(idle_ms) = 0;
+            if (id(session_state) == 0) {
+              // IDLE → 累计"运动中"时长
+              id(moving_ms) += FRAME_GAP_MS;
+              if (id(moving_ms) >= START_CONFIRM_MS) {
+                // ★ 确认开始会话
+                id(session_state) = 1;
+                id(sess_start_epoch) = (uint32_t) time(nullptr);
+                id(sess_duration_s) = 0;
+                id(sess_distance_km) = 0.0f;
+                id(sess_max_speed) = spd;
+                id(sess_speed_sum) = 0.0f;
+                id(sess_speed_cnt) = 0;
+                id(sess_incline_min) = inc;
+                id(sess_incline_max) = inc;
+                ESP_LOGI("session", "★ 会话开始（速度 %.2f km/h）", spd);
+              }
+            } else {
+              // RUNNING 或 PAUSED → 恢复运行
+              if (id(session_state) == 2) {
+                ESP_LOGI("session", "会话恢复（从暂停）");
+                id(session_state) = 1;
+              }
+              // 累加统计
+              id(sess_speed_sum) += spd;
+              id(sess_speed_cnt)++;
+              if (spd > id(sess_max_speed)) id(sess_max_speed) = spd;
+              if (inc < id(sess_incline_min)) id(sess_incline_min) = inc;
+              if (inc > id(sess_incline_max)) id(sess_incline_max) = inc;
+              // 距离/时长用差值（跑步机的累计值）
+              // ★ 注意：这里需要 tm_cum_dist / tm_cum_time 两个来自帧的累计值
+              //   为简化，先按时间累计；距离由速度和时间的积分近似
+              id(sess_duration_s) += FRAME_GAP_MS / 1000.0f * 1.0f;
+              id(sess_distance_km) += (spd * FRAME_GAP_MS / 3600000.0f);
+            }
+          } else {
+            // ---- 速度为 0 ----
+            id(moving_ms) = 0;
+            if (id(session_state) == 1) {
+              // RUNNING → 可能暂停
+              id(idle_ms) += FRAME_GAP_MS;
+              if (id(idle_ms) >= 10000) {
+                // 停 10 秒，先标为暂停（还没结束）
+                id(session_state) = 2;
+                ESP_LOGI("session", "会话暂停");
+              }
+            } else if (id(session_state) == 2) {
+              id(idle_ms) += FRAME_GAP_MS;
+              if (id(idle_ms) >= END_CONFIRM_MS) {
+                // ★ 停 60 秒，结算会话
+                float dur_min = id(sess_duration_s) / 60.0f;
+                float avg = id(sess_speed_cnt) > 0
+                          ? id(sess_speed_sum) / id(sess_speed_cnt) : 0.0f;
+
+                ESP_LOGI("session", "★ 会话结束：%.1f 分 / %.2f km / 均速 %.2f / 最高 %.2f",
+                         dur_min, id(sess_distance_km), avg, id(sess_max_speed));
+
+                // 发布到 HA
+                id(sess_duration).publish_state(dur_min);
+                id(sess_distance).publish_state(id(sess_distance_km));
+                id(sess_avg_speed).publish_state(avg);
+                id(sess_max_speed_sensor).publish_state(id(sess_max_speed));
+                id(sess_incline_range).publish_state(
+                    id(sess_incline_max) - id(sess_incline_min));
+
+                // 摘要文本（可在 HA 里直接用于通知）
+                char buf[160];
+                snprintf(buf, sizeof(buf),
+                         "跑了 %.1f 分钟，%.2f 公里，均速 %.1f km/h，最高 %.1f，坡度 %.0f%%~%.0f%%",
+                         dur_min, id(sess_distance_km), avg,
+                         id(sess_max_speed),
+                         id(sess_incline_min), id(sess_incline_max));
+                id(sess_summary).publish_state(buf);
+
+                // 触发 HA 自动化
+                // （在 HA 里监听 text_sensor.跑步机_上次会话摘要 的变化即可推送通知）
+
+                // 重置
+                id(session_state) = 0;
+                id(idle_ms) = 0;
+                id(moving_ms) = 0;
+              }
+            }
+          }
+
+# ---------------------------------------------------------------------------
+# Home Assistant 里的自动化（YAML 示例，不是 ESPHome）
+#
+# 放到 HA 的 automations.yaml 里：会话结束后自动推送手机通知
+# ---------------------------------------------------------------------------
+#
+# - id: treadmill_session_notify
+#   alias: 跑步机 - 会话结束通知
+#   trigger:
+#     - platform: state
+#       entity_id: text_sensor.treadmill_last_session_summary
+#   condition:
+#     - condition: template
+#       value_template: "{{ trigger.to_state.state not in ['unknown', 'unavailable', ''] }}"
+#   action:
+#     - service: notify.mobile_app_your_phone
+#       data:
+#         title: "🏃 跑步完成"
+#         message: "{{ trigger.to_state.state }}"
+#     - service: input_text.set_value
+#       target:
+#         entity_id: input_text.last_run
+#       data:
+#         value: "{{ trigger.to_state.state }}"
+#
+# - id: treadmill_daily_summary
+#   alias: 跑步机 - 每日汇总
+#   trigger:
+#     - platform: time
+#       at: "21:00:00"
+#   action:
+#     - service: notify.mobile_app_your_phone
+#       data:
+#         title: "今日运动"
+#         message: >-
+#           今天共跑了 {{ states('sensor.treadmill_session_duration') | float(0) | round(1) }} 分钟，
+#           {{ states('sensor.treadmill_session_distance') | float(0) | round(2) }} 公里。
