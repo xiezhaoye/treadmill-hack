@@ -1,0 +1,27 @@
+# ESPHome
+esphome/secrets.yaml
+esphome/.esphome/
+*.bin
+*.elf
+*.factory.bin
+
+# Android
+android/app/build/
+android/.gradle/
+android/local.properties
+android/.idea/
+*.apk
+*.keystore
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 抓包文件（可能含设备信息）
+*.log
+btsnoop*
+app.ab
+
+# macOS
+.DS_Store
