@@ -40,13 +40,11 @@ body{
 header{display:grid;grid-template-columns:38px 1fr 38px;align-items:center;
   padding:8px 4px 16px;gap:8px}
 .header-left{display:flex;align-items:center;justify-content:flex-start}
-.header-center{display:flex;align-items:center;justify-content:center;min-width:0}
+.header-center{display:flex;align-items:center;justify-content:center;gap:8px;min-width:0}
 .header-right{display:flex;align-items:center;justify-content:flex-end}
 h1{font-size:30px;font-weight:700;letter-spacing:-.4px;line-height:1.15;
   text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.status{display:flex;align-items:center;justify-content:center;
-  width:38px;height:38px;border-radius:11px;background:var(--card);
-  box-shadow:0 1px 3px rgba(0,0,0,.06);flex-shrink:0}
+.header-center .dot{flex-shrink:0;margin-top:2px}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--gray);transition:background .3s}
 .dot.on{background:var(--green);box-shadow:0 0 0 3px rgba(52,199,89,.18)}
 .dot.off{background:var(--red);box-shadow:0 0 0 3px rgba(255,59,48,.15)}
@@ -217,10 +215,39 @@ input[type=range]:disabled{opacity:.4}
   width:8px;height:8px;border-radius:50%;
   background:var(--blue);box-shadow:0 0 0 3px var(--card);
 }
-.tl-time{font-size:13px;font-weight:600;color:var(--text2);font-variant-numeric:tabular-nums}
-.tl-main{font-size:16px;font-weight:600;margin-top:3px}
+.tl-item{padding:12px 0}
+.tl-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.tl-time{font-size:13px;font-weight:500;color:var(--text2);font-variant-numeric:tabular-nums}
+.tl-dur{font-size:20px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-.4px}
+.tl-main{font-size:15px;font-weight:500;margin-top:4px}
 .tl-delta{font-size:13px;color:var(--text2);margin-top:2px}
 .tl-delta .arrow{color:var(--blue);font-weight:600}
+
+/* ── 独立页面（详情页）── */
+.page{
+  position:fixed;inset:0;z-index:150;
+  background:var(--bg);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:calc(var(--safe-t) + 8px) 16px calc(var(--safe-b) + 24px);
+  transform:translateX(100%);
+  transition:transform .28s cubic-bezier(.32,.72,0,1);
+  visibility:hidden;
+}
+.page.show{transform:translateX(0);visibility:visible}
+.page-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:4px 0 16px;gap:12px;
+}
+.back-btn{
+  display:flex;align-items:center;gap:2px;
+  border:none;background:transparent;color:var(--blue);
+  font:500 17px/1 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+  cursor:pointer;padding:8px 8px 8px 0;
+  -webkit-tap-highlight-color:transparent;
+}
+.back-btn:active{opacity:.5}
+.back-btn svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.page-title{font-size:17px;font-weight:600;letter-spacing:-.2px}
 
 footer{text-align:center;font-size:12px;color:var(--text2);padding:20px 0 8px;line-height:1.7}
 footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;opacity:.8}
@@ -248,12 +275,9 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
   </div>
   <div class="header-center">
     <h1 id="pageTitle">跑步机</h1>
+    <span class="dot" id="dot" title="连接状态"></span>
   </div>
-  <div class="header-right">
-    <div class="status" id="statusPill" title="连接状态">
-      <span class="dot" id="dot"></span>
-    </div>
-  </div>
+  <div class="header-right"></div>
 </header>
 
 <!-- 标签切换 -->
@@ -340,16 +364,22 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
     <div class="group"><div class="stat"><div class="k" style="color:var(--text2)">还没有记录 · 跑起来会自动记录</div></div></div>
   </div>
 
-  <div class="group" style="margin-top:14px">
-    <div class="stat" style="cursor:pointer" id="btnImport">
-      <div class="k">从历史数据导入<span class="sub2">从 ESP32 历史记录补录之前的跑步</span></div>
-      <div class="v" style="font-size:15px;color:var(--blue)">导入</div>
-    </div>
-  </div>
 
-  <div id="recordDetail" style="display:none"></div>
 
 </div><!-- /tabRecords -->
+
+<!-- ══════════ 独立页：记录详情 ══════════ -->
+<div class="page" id="pageDetail">
+  <div class="page-header">
+    <button class="back-btn" id="btnBack">
+      <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      返回
+    </button>
+    <div class="page-title" id="detailTitle">运行详情</div>
+    <div style="width:64px"></div>
+  </div>
+  <div id="detailBody"></div>
+</div>
 
 <!-- ══════════ 视图 2：ESP32 ══════════ -->
 <div class="esp-view" id="viewEsp32">
@@ -737,6 +767,8 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
   const START_HOLD  = 3000;     // 持续 3 秒才算开始
   const END_HOLD    = 120000;   // 停止 2 分钟算结束
   const CHANGE_GAP  = 60000;    // 1 分钟内的多次变动合并为一条
+  const MIN_SEG_MS  = 60000;    // 新段必须持续 1 分钟才独立成段
+  const INC_STEP    = 1;        // 坡度变化最小单位（整数）
   const MAX_RUNS    = 100;
 
   const runs = {
@@ -744,6 +776,7 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
     cur: null,          // { start, segments: [{t, speed, incline, fromSpeed, fromIncline}] }
     movingSince: 0,
     stoppedSince: 0,
+    pending: null,      // 挂起中的变化 {speed, incline, since}
   };
 
   function loadRuns(){
@@ -765,7 +798,8 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
 
   function startRun(ts){
     runs.cur = { start: ts, end: null, segments: [] };
-    addSegment(ts, 0, 0, null, null);   // 起步片段
+    runs.pending = null;
+    addSegment(ts, state.speed, state.incline, null, null);   // 起步片段
     saveCur();
   }
 
@@ -775,33 +809,52 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
     runs.cur.segments.push({
       t: ts,
       speed: +speed.toFixed(1),
-      incline: +incline.toFixed(1),
+      incline: Math.round(incline),
       fromSpeed: fromSpeed === null ? null : +fromSpeed.toFixed(1),
-      fromIncline: fromIncline === null ? null : +fromIncline.toFixed(1),
+      fromIncline: fromIncline === null ? null : Math.round(fromIncline),
     });
     saveCur();
   }
 
-  // 检测速度/坡度变化，决定是否新增片段
+  // 检测速度/坡度变化。
+  // 规则：变化先「挂起」（pending），只有持续满 1 分钟才真正切段；
+  //      1 分钟内又变回去则视为抖动，丢弃。
   function checkChange(){
     if (!runs.cur) return;
     const segs = runs.cur.segments;
     const last = segs[segs.length - 1];
     const now = Date.now();
 
-    const spdChanged = Math.abs(state.speed - last.speed) >= 0.2;
-    const incChanged = Math.abs(state.incline - last.incline) >= 0.5;
-    if (!spdChanged && !incChanged) return;
+    const spdNow = +state.speed.toFixed(1);
+    const incRaw = state.incline;
+    const incNow = Math.round(incRaw);              // 坡度取整
 
-    // 1 分钟内合并：直接更新最后一个片段的目标值
-    if (now - last.t <= CHANGE_GAP){
-      if (spdChanged) last.speed = +state.speed.toFixed(1);
-      if (incChanged) last.incline = +state.incline.toFixed(1);
-      saveCur();
-    } else {
-      // 超过 1 分钟，新建一条片段
-      addSegment(now, state.speed, state.incline, last.speed, last.incline);
+    const spdDiff = Math.abs(spdNow - last.speed) >= 0.2;
+    // 坡度变化：取整后的整数必须真的不同（0→0.9 取整为 1 但与 0 的整数差 = 1，
+    // 这里按"整数差 ≥ 1"算变化，符合"至少变化 1"的语义）
+    const incDiff = Math.abs(incNow - last.incline) >= INC_STEP && incNow !== last.incline;
+
+    if (!spdDiff && !incDiff){
+      // 回到当前段的稳定值 → 取消挂起
+      if (runs.pending){ runs.pending = null; saveCur(); }
+      return;
     }
+
+    // 新值没有变化，继续等
+    if (runs.pending &&
+        Math.abs(runs.pending.speed - spdNow) < 0.2 &&
+        runs.pending.incline === incNow){
+      // 已满 1 分钟 → 正式切段
+      if (now - runs.pending.since >= MIN_SEG_MS){
+        addSegment(runs.pending.since, spdNow, incNow, last.speed, last.incline);
+        runs.pending = null;
+      }
+      return;
+    }
+
+    // 记录新的挂起点
+    runs.pending = { speed: spdNow, incline: incNow, since: now };
+    saveCur();
   }
 
   function finishRun(ts){
@@ -840,7 +893,7 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
   const p2 = n => String(n).padStart(2,'0');
   function fmtDur(sec){
     const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = Math.round(sec%60);
-    if (h) return h + ' 小时 ' + m + ' 分';
+    if (h) return h + 'h ' + m + 'm';
     if (m) return m + ' 分';
     return s + ' 秒';
   }
@@ -889,7 +942,6 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
     if (!box) return;
     if (!runs.list.length){
       box.innerHTML = '<div class="group"><div class="stat"><div class="k" style="color:var(--text2)">还没有记录 · 跑起来会自动记录</div></div></div>';
-      $('recordDetail').style.display = 'none';
       return;
     }
     box.innerHTML = runs.list.map((r, idx) => {
@@ -905,7 +957,6 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
     box.querySelectorAll('[data-run]').forEach(el => {
       el.onclick = () => showRunDetail(+el.dataset.run);
     });
-    $('recordDetail').style.display = 'none';
   }
 
   function showRunDetail(idx){
@@ -914,7 +965,6 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
     const { dur, dist } = runSummary(r);
     const endT = r.end;
 
-    // 时间线
     const items = r.segments.map((s, i) => {
       const next = r.segments[i+1];
       const segEnd = next ? next.t : endT;
@@ -933,7 +983,10 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
         delta = '<div class="tl-delta">起步</div>';
       }
       return `<div class="tl-item">
-        <div class="tl-time">${fmtClock(s.t)} · 持续 ${fmtDur(segDur)}</div>
+        <div class="tl-head">
+          <span class="tl-time">${fmtClock(s.t)}</span>
+          <span class="tl-dur">${fmtDur(segDur)}</span>
+        </div>
         <div class="tl-main">${main}</div>
         ${delta}
       </div>`;
@@ -946,7 +999,8 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
       <div class="stat"><div class="k">变动</div><div class="v" style="font-size:15px">${r.segments.length} 段</div></div>
     </div>`;
 
-    $('recordDetail').innerHTML = `
+    $('detailTitle').textContent = fmtDay(r.start) + ' ' + fmtClock(r.start);
+    $('detailBody').innerHTML = `
       <div class="group-title">运行明细</div>
       ${header}
       <div class="group"><div style="padding:8px 16px 16px">
@@ -955,135 +1009,37 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
       <div class="group"><div class="stat" style="cursor:pointer">
         <div class="k" style="color:var(--red)" id="delRun">删除这条记录</div><div class="v"></div>
       </div></div>`;
-    $('recordDetail').style.display = '';
 
     $('delRun').onclick = () => {
       if (confirm('确定删除这条记录？')){
         runs.list.splice(idx, 1);
         saveRuns();
         renderRecords();
+        hideDetail();
       }
     };
-    $('recordDetail').scrollIntoView({behavior:'smooth', block:'start'});
+
+    // 打开独立页
+    $('pageDetail').classList.add('show');
+    $('pageDetail').scrollTop = 0;
+    document.body.style.overflow = 'hidden';
+    history.pushState({detail: idx}, '');
   }
 
-  /* ══════ 从历史导入（走 HA）══════ */
-  async function fetchHistory(entity, startISO){
-    const r = await fetch('/ha/history?entity=' + encodeURIComponent(entity) + '&start=' + encodeURIComponent(startISO));
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
-    return (d && d[0]) ? d[0] : [];
+  function hideDetail(){
+    $('pageDetail').classList.remove('show');
+    document.body.style.overflow = '';
   }
 
-  function parseSeries(pts){
-    const out = [];
-    for (const p of pts){
-      const v = parseFloat(p.state);
-      if (isNaN(v)) continue;
-      const t = new Date(p.last_changed || p.lu).getTime();
-      if (isNaN(t)) continue;
-      out.push([t, v]);
-    }
-    out.sort((a,b) => a[0] - b[0]);
-    return out;
-  }
-  function valueAt(series, t){
-    let v = 0;
-    for (const [ts, val] of series){ if (ts <= t) v = val; else break; }
-    return v;
-  }
+  // 返回按钮
+  $('btnBack').onclick = () => {
+    if (history.state && history.state.detail !== undefined) history.back();
+    else hideDetail();
+  };
+  window.addEventListener('popstate', () => {
+    hideDetail();
+  });
 
-  async function importFromHistory(){
-    const btn = $('btnImport');
-    if (btn){ btn.style.opacity = '0.5'; }
-    toast('正在导入…', 2000);
-    try {
-      const today = new Date();
-      today.setHours(0,0,0,0);
-      const startISO = today.toISOString().replace('.000Z','+00:00');
-
-      const [spdPts, incPts] = await Promise.all([
-        fetchHistory('sensor.yang_tai_pao_bu_ji_treadmill_current_speed', startISO),
-        fetchHistory('sensor.yang_tai_pao_bu_ji_treadmill_current_incline', startISO),
-      ]);
-      const S = parseSeries(spdPts), I = parseSeries(incPts);
-      if (!S.length){ toast('没有历史数据'); return; }
-
-      // 找跑步段
-      const found = [];
-      let cur = null;
-      for (const [t, v] of S){
-        if (v > START_SPEED){
-          if (!cur) cur = { start: t, pts: [] };
-          cur.pts.push([t, v]);
-        } else if (cur){
-          cur.end = t; found.push(cur); cur = null;
-        }
-      }
-      if (cur){ cur.end = S[S.length-1][0]; found.push(cur); }
-
-      // 已有记录的 start 集合（去重）
-      const existing = new Set(runs.list.map(r => Math.floor(r.start/1000)));
-
-      let added = 0;
-      for (const r of found){
-        if ((r.end - r.start)/1000 < 10) continue;      // 太短忽略
-        if (existing.has(Math.floor(r.start/1000))) continue;   // 已存在
-
-        const segs = [];
-        let prevS = r.pts[0][1];
-        let prevI = valueAt(I, r.start);
-        let lastT = r.start;
-        segs.push({t: r.start, speed: +prevS.toFixed(1), incline: +prevI.toFixed(1), fromSpeed: null, fromIncline: null});
-
-        // 坡度变化
-        for (const [t, v] of I){
-          if (t <= r.start || t >= r.end) continue;
-          if (Math.abs(v - prevI) < 0.5) continue;
-          const spdNow = valueAt(S, t);
-          if (t - lastT <= CHANGE_GAP){
-            segs[segs.length-1].incline = +v.toFixed(1);
-            segs[segs.length-1].speed = +spdNow.toFixed(1);
-          } else {
-            segs.push({t, speed: +spdNow.toFixed(1), incline: +v.toFixed(1),
-                       fromSpeed: +prevS.toFixed(1), fromIncline: +prevI.toFixed(1)});
-            lastT = t;
-          }
-          prevI = v; prevS = spdNow;
-        }
-        // 速度变化
-        for (const [t, v] of r.pts){
-          if (t <= r.start) continue;
-          if (Math.abs(v - prevS) < 0.2) continue;
-          const incNow = valueAt(I, t);
-          if (t - lastT <= CHANGE_GAP){
-            segs[segs.length-1].speed = +v.toFixed(1);
-            segs[segs.length-1].incline = +incNow.toFixed(1);
-          } else {
-            segs.push({t, speed: +v.toFixed(1), incline: +incNow.toFixed(1),
-                       fromSpeed: +prevS.toFixed(1), fromIncline: +prevI.toFixed(1)});
-            lastT = t;
-          }
-          prevS = v; prevI = incNow;
-        }
-
-        runs.list.push({ start: r.start, end: r.end, segments: segs, _imported: true });
-        added++;
-      }
-
-      runs.list.sort((a,b) => b.start - a.start);
-      saveRuns();
-      renderRecords();
-      toast(added ? `已导入 ${added} 条记录` : '没有新记录', 2500);
-    } catch(e){
-      console.error(e);
-      toast('导入失败：' + e.message, 3000);
-    } finally {
-      if (btn){ btn.style.opacity = ''; }
-    }
-  }
-  const btnImportEl = $('btnImport');
-  if (btnImportEl) btnImportEl.onclick = importFromHistory;
 
   loadRuns();
   renderRecords();
