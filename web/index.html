@@ -497,7 +497,13 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
 <script>
 (function(){
   'use strict';
-  const $ = id => document.getElementById(id);
+  // 安全的元素获取：找不到时返回一个空壳对象，避免 null.xxx 抛错
+  const _emptyEl = {
+    title:'', textContent:'', innerHTML:'', value:'', style:{},
+    classList:{add(){},remove(){},toggle(){},contains(){return false}},
+    onclick:null, appendChild(){}, removeChild(){},
+  };
+  const $ = id => document.getElementById(id) || _emptyEl;
   document.getElementById('host').textContent = location.host;
 
   /* ══════ 状态 ══════ */
@@ -572,7 +578,8 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
 
     const dot = $('dot');
     dot.className = 'dot ' + (state.connected ? 'on' : 'off');
-    $('statusPill').title = state.connected ? (run ? '运行中' : '已就绪') : '未连接';
+    const _dot = $('dot');
+    if (_dot) _dot.title = state.connected ? (run ? '运行中' : '已就绪') : '未连接';
 
     $('connInfo').textContent = state.connected
       ? (run ? '跑步机运行中 · ' + state.speed.toFixed(1) + ' km/h' : '跑步机已连接，待命')
@@ -631,7 +638,8 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
 
     if ($('viewEsp32').classList.contains('active')){
       $('dot').className = 'dot ' + (state.uptime === null ? '' : 'on');
-      $('statusPill').title = state.uptime === null ? '读取中…' : '在线';
+      const _d2 = $('dot');
+      if (_d2) _d2.title = state.uptime === null ? '读取中…' : '在线';
     }
   }
 
@@ -691,7 +699,8 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
     es.onerror = () => {
       state.connected = false;
       $('dot').className = 'dot off';
-      $('statusPill').title = '已断开，重连中…';
+      const _d3 = $('dot');
+      if (_d3) _d3.title = '已断开，重连中…';
       $('connInfo').textContent = '与 ESP32 的连接断开，正在重试…';
       es.close();
       retry = Math.min(retry + 1, 6);

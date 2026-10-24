@@ -179,8 +179,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not token:
             self.send_error(500, "HA token missing")
             return
-        url = (f"{HA_BASE}/api/history/period/{start}"
-               f"?filter_entity_id={entity}&minimal_response&no_attributes")
+        # start 里的 "+00:00" 必须重新编码成 %2B，否则 HA 会把 + 当成空格
+        start_enc = urllib.parse.quote(start, safe='')
+        url = (f"{HA_BASE}/api/history/period/{start_enc}"
+               f"?filter_entity_id={urllib.parse.quote(entity, safe='')}"
+               f"&minimal_response&no_attributes")
         req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token})
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
