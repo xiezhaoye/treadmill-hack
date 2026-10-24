@@ -371,6 +371,13 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
 <div class="tab-panel" id="tabRecords">
 
 
+  <div class="group" style="margin-bottom:14px">
+    <div class="stat" style="cursor:pointer" id="btnExport">
+      <div class="k">导出记录<span class="sub2" id="exportHint">CSV 格式，可用 Excel 打开</span></div>
+      <div class="v" style="font-size:15px;color:var(--blue)">导出</div>
+    </div>
+  </div>
+
   <div id="recordsList">
     <div class="group"><div class="stat"><div class="k" style="color:var(--text2)">还没有记录 · 跑起来会自动记录</div></div></div>
   </div>
@@ -559,7 +566,7 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
     const sn = $('speedNum');
     sn.textContent = state.speed.toFixed(1);
     sn.classList.toggle('run', run);
-    $('inclineNum').innerHTML = state.incline.toFixed(1) +
+    $('inclineNum').innerHTML = Math.round(state.incline) +
       '<span style="font-size:15px;font-weight:500;color:var(--text2)">%</span>';
     $('rssiNum').textContent = fmtRssi(state.bleRssi);
 
@@ -1102,6 +1109,64 @@ footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11
   window.addEventListener('popstate', () => hideDetail());
 
   // 首次进入记录页时加载
+
+  /* ══════ 导出 CSV ══════ */
+  function csvEscape(v){
+    const s = String(v);
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  function exportCSV(){
+    if (!runs.list.length){
+      toast('没有记录可导出', 1800);
+      return;
+    }
+
+    const lines = [];
+    // 表头
+    lines.push([
+      '开始时间','结束时间','总时长(分)','距离(km)','段号',
+      '本段开始','本段时长(秒)','速度(km/h)','坡度(%)','速度变化','坡度变化'
+    ].map(csvEscape).join(','));
+
+    for (const r of runs.list){
+      const startStr = new Date(r.start).toLocaleString('zh-CN');
+      const endStr = new Date(r.end).toLocaleString('zh-CN');
+      const dist = runDistance(r);
+
+      r.segments.forEach((s, i) => {
+        const segStart = new Date(s.t).toLocaleString('zh-CN');
+        const spdChange = (s.fromSpeed !== null && Math.abs(s.fromSpeed - s.speed) >= 0.2)
+          ? s.fromSpeed.toFixed(1) + '→' + s.speed.toFixed(1) : '';
+        const incChange = (s.fromIncline !== null && s.fromIncline !== s.incline)
+          ? s.fromIncline + '→' + s.incline : '';
+        lines.push([
+          startStr, endStr, (r.durationSec/60).toFixed(1), dist,
+          i + 1, segStart, s.durationSec,
+          s.speed.toFixed(1), s.incline,
+          spdChange, incChange
+        ].map(csvEscape).join(','));
+      });
+    }
+
+    const csv = '\ufeff' + lines.join('\r\n');   // BOM 让 Excel 正确识别 UTF-8
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const now = new Date();
+    const p = n => String(n).padStart(2,'0');
+    a.href = url;
+    a.download = `跑步记录_${now.getFullYear()}${p(now.getMonth()+1)}${p(now.getDate())}_${p(now.getHours())}${p(now.getMinutes())}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast(`已导出 ${runs.list.length} 条记录`, 2200);
+  }
+
+  if ($('btnExport')) $('btnExport').onclick = exportCSV;
 
   /* ══════ 刷新按钮 ══════ */
   async function doRefresh(){

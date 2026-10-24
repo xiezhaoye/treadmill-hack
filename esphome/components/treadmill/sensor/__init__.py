@@ -18,12 +18,12 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Required(CONF_BLE_CLIENT_ID): cv.use_id(ble_client.BLEClient),
         cv.Optional(CONF_SPEED): sensor.sensor_schema(
             unit_of_measurement="km/h",
-            accuracy_decimals=2,
+            accuracy_decimals=1,
             icon="mdi:speedometer",
         ),
         cv.Optional(CONF_INCLINE): sensor.sensor_schema(
             unit_of_measurement="%",
-            accuracy_decimals=1,
+            accuracy_decimals=0,
             icon="mdi:slope-uphill",
         ),
         cv.Optional(CONF_DISTANCE): sensor.sensor_schema(
