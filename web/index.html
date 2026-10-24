@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>阳台跑步机</title>
+<style>
+:root{
+  --bg:#f2f2f7; --card:#ffffff; --text:#000; --text2:#8e8e93;
+  --blue:#007aff; --green:#34c759; --orange:#ff9500; --red:#ff3b30; --gray:#8e8e93;
+  --purple:#af52de; --teal:#5ac8fa;
+  --sep:rgba(60,60,67,.12); --fill:rgba(120,120,128,.12);
+  --radius:16px; --radius-lg:20px;
+  --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#000000; --card:#1c1c1e; --text:#fff; --text2:#8e8e93;
+    --blue:#0a84ff; --green:#30d158; --orange:#ff9f0a; --red:#ff453a;
+    --purple:#bf5af2; --teal:#64d2ff;
+    --sep:rgba(84,84,88,.65); --fill:rgba(120,120,128,.24);
+  }
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
+  background:var(--bg); color:var(--text);
+  padding:calc(var(--safe-t) + 12px) 16px calc(var(--safe-b) + 24px);
+  max-width:600px; margin:0 auto;
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior-y:contain;
+}
+
+/* ── 顶部 ── */
+header{display:grid;grid-template-columns:38px 1fr 38px;align-items:center;
+  padding:8px 4px 16px;gap:8px}
+.header-left{display:flex;align-items:center;justify-content:flex-start}
+.header-center{display:flex;align-items:center;justify-content:center;min-width:0}
+.header-right{display:flex;align-items:center;justify-content:flex-end}
+h1{font-size:30px;font-weight:700;letter-spacing:-.4px;line-height:1.15;
+  text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{display:flex;align-items:center;justify-content:center;
+  width:38px;height:38px;border-radius:11px;background:var(--card);
+  box-shadow:0 1px 3px rgba(0,0,0,.06);flex-shrink:0}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--gray);transition:background .3s}
+.dot.on{background:var(--green);box-shadow:0 0 0 3px rgba(52,199,89,.18)}
+.dot.off{background:var(--red);box-shadow:0 0 0 3px rgba(255,59,48,.15)}
+
+/* ── Home 图标 + 下拉菜单 ── */
+.home-btn{
+  width:38px;height:38px;border-radius:11px;border:none;flex-shrink:0;
+  background:var(--card);color:var(--blue);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);
+  transition:transform .12s ease,background .2s;
+}
+.home-btn:active{transform:scale(.92)}
+.home-btn svg{width:21px;height:21px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+.menu-scrim{position:fixed;inset:0;z-index:190;display:none}
+.menu-scrim.show{display:block}
+.menu{
+  position:fixed;z-index:200;min-width:212px;
+  background:rgba(250,250,252,.92);backdrop-filter:blur(24px) saturate(180%);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);
+  border-radius:14px;padding:6px;
+  box-shadow:0 10px 40px rgba(0,0,0,.16),0 0 0 .5px rgba(0,0,0,.06);
+  opacity:0;transform:scale(.94) translateY(-6px);transform-origin:top left;
+  transition:opacity .16s ease,transform .16s ease;pointer-events:none;
+}
+@media (prefers-color-scheme: dark){
+  .menu{background:rgba(44,44,46,.94);box-shadow:0 10px 40px rgba(0,0,0,.6),0 0 0 .5px rgba(255,255,255,.08)}
+}
+.menu.show{opacity:1;transform:scale(1) translateY(0);pointer-events:auto}
+.menu-item{
+  display:flex;align-items:center;gap:11px;
+  padding:10px 12px;border-radius:9px;cursor:pointer;
+  font-size:15px;font-weight:400;color:var(--text);
+  transition:background .12s;
+}
+.menu-item:active{background:var(--fill)}
+.menu-item.active{color:var(--blue);font-weight:600}
+.menu-item svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.menu-item .check{margin-left:auto;width:17px;height:17px;opacity:0}
+.menu-item.active .check{opacity:1}
+
+/* ── 视图 ── */
+.view{display:none;animation:fade .25s ease}
+.view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── 大字数据卡 ── */
+.hero{
+  background:var(--card);border-radius:var(--radius-lg);
+  padding:24px 18px 18px;margin-bottom:14px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04);
+}
+.metric{display:flex;align-items:baseline;justify-content:center;gap:8px}
+.metric .num{
+  font-size:76px;font-weight:700;letter-spacing:-3px;line-height:1;
+  font-variant-numeric:tabular-nums;transition:color .3s;
+}
+.metric .num.run{color:var(--green)}
+.metric .unit{font-size:20px;font-weight:500;color:var(--text2);letter-spacing:-.2px}
+.metric-label{text-align:center;font-size:13px;color:var(--text2);margin-top:6px;font-weight:500}
+.sub{display:flex;margin-top:22px;padding-top:18px;border-top:1px solid var(--sep)}
+.sub>div{flex:1;text-align:center}
+.sub .v{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.sub .k{font-size:12px;color:var(--text2);margin-top:3px;font-weight:500}
+
+/* ── 分组卡片 ── */
+.group{background:var(--card);border-radius:var(--radius);margin-bottom:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.group-title{font-size:13px;font-weight:600;color:var(--text2);padding:0 4px 8px;letter-spacing:.2px}
+.row{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--sep);gap:16px}
+.row:last-child{border-bottom:none}
+.row .label{font-size:16px;font-weight:400}
+.row .hint{font-size:12px;color:var(--text2);margin-top:2px}
+.row .btn{flex-shrink:0;min-width:76px;padding:10px 18px !important;font-size:14px !important;flex-direction:row;white-space:nowrap}
+
+/* 状态行（ESP32 页面用） */
+.stat{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--sep);gap:16px}
+.stat:last-child{border-bottom:none}
+.stat .k{font-size:16px;font-weight:400}
+.stat .k .sub2{display:block;font-size:12px;color:var(--text2);margin-top:2px;font-weight:400}
+.stat .v{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.3px;text-align:right;white-space:nowrap}
+.stat .v .u{font-size:12px;font-weight:500;color:var(--text2);margin-left:2px}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;margin-left:6px;vertical-align:1px}
+.badge.ok{background:rgba(52,199,89,.14);color:var(--green)}
+.badge.warn{background:rgba(255,149,0,.15);color:var(--orange)}
+.badge.bad{background:rgba(255,59,48,.13);color:var(--red)}
+
+/* ── 主操作按钮 ── */
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px}
+.btn{
+  border:none;border-radius:14px;padding:15px 12px;
+  font:600 16px/1 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+  color:#fff;cursor:pointer;
+  transition:transform .12s ease,opacity .12s ease;
+  display:flex;flex-direction:column;align-items:center;gap:7px;
+}
+.btn svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.btn:active{transform:scale(.96);opacity:.85}
+.btn:disabled{opacity:.35;pointer-events:none}
+.btn.primary{background:var(--green)}
+.btn.stop{background:var(--red)}
+.btn.blue{background:var(--blue)}
+.btn.orange{background:var(--orange)}
+.btn.gray{background:var(--gray)}
+
+/* ── 滑块 ── */
+.slider-row{padding:16px}
+.slider-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.slider-head .name{font-size:16px;font-weight:400}
+.slider-head .val{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--blue);letter-spacing:-.4px}
+input[type=range]{-webkit-appearance:none;width:100%;height:5px;border-radius:3px;background:var(--fill);outline:none}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:28px;height:28px;border-radius:50%;
+  background:#fff;border:.5px solid rgba(0,0,0,.04);
+  box-shadow:0 2px 8px rgba(0,0,0,.16),0 0 1px rgba(0,0,0,.1);
+  cursor:pointer;transition:transform .15s;
+}
+input[type=range]::-webkit-slider-thumb:active{transform:scale(1.08)}
+input[type=range]:disabled{opacity:.4}
+.ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-top:8px;font-variant-numeric:tabular-nums}
+
+/* ── 提示条 ── */
+.toast{
+  position:fixed;left:50%;bottom:calc(var(--safe-b) + 28px);transform:translateX(-50%) translateY(20px);
+  background:rgba(0,0,0,.82);color:#fff;font-size:14px;font-weight:500;
+  padding:11px 20px;border-radius:22px;opacity:0;pointer-events:none;
+  transition:opacity .25s,transform .25s;backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);max-width:88vw;text-align:center;z-index:299;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (prefers-color-scheme:dark){.toast{background:rgba(255,255,255,.92);color:#000}}
+
+/* ── 标签栏（iOS 分段控件风格）── */
+.tabs{
+  display:flex;gap:2px;padding:3px;
+  background:var(--fill);border-radius:11px;
+  margin-bottom:16px;
+}
+.tab{
+  flex:1;border:none;background:transparent;
+  padding:8px 12px;border-radius:9px;
+  font:600 14px/1.2 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+  color:var(--text2);cursor:pointer;
+  transition:background .18s ease,color .18s ease,box-shadow .18s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.tab.active{
+  background:var(--card);color:var(--text);
+  box-shadow:0 1px 3px rgba(0,0,0,.08);
+}
+.tab:active{opacity:.7}
+
+/* ── 面板 ── */
+.tab-panel{display:none}
+.tab-panel.active{display:block;animation:fade .22s ease}
+.esp-view{display:none}
+.esp-view.active{display:block;animation:fade .22s ease}
+
+/* 变动时间线 */
+.timeline{position:relative;padding-left:22px}
+.timeline::before{
+  content:'';position:absolute;left:6px;top:8px;bottom:8px;
+  width:2px;background:var(--sep);border-radius:1px;
+}
+.tl-item{position:relative;padding:10px 0}
+.tl-item::before{
+  content:'';position:absolute;left:-19px;top:15px;
+  width:8px;height:8px;border-radius:50%;
+  background:var(--blue);box-shadow:0 0 0 3px var(--card);
+}
+.tl-time{font-size:13px;font-weight:600;color:var(--text2);font-variant-numeric:tabular-nums}
+.tl-main{font-size:16px;font-weight:600;margin-top:3px}
+.tl-delta{font-size:13px;color:var(--text2);margin-top:2px}
+.tl-delta .arrow{color:var(--blue);font-weight:600}
+
+footer{text-align:center;font-size:12px;color:var(--text2);padding:20px 0 8px;line-height:1.7}
+footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;opacity:.8}
+
+@media (max-width:380px){
+  h1{font-size:24px}
+  .home-btn{width:34px;height:34px}
+  .metric .num{font-size:64px;letter-spacing:-2px}
+  .btn{padding:13px 10px;font-size:15px}
+  .row,.stat{padding:12px 14px}
+}
+@media (min-width:700px){
+  body{max-width:680px;padding-left:24px;padding-right:24px}
+  .metric .num{font-size:88px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <button class="home-btn" id="homeBtn" aria-label="切换设备">
+      <svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"/><path d="M5.5 9.5V20a1 1 0 001 1h11a1 1 0 001-1V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
+    </button>
+  </div>
+  <div class="header-center">
+    <h1 id="pageTitle">跑步机</h1>
+  </div>
+  <div class="header-right">
+    <div class="status" id="statusPill" title="连接状态">
+      <span class="dot" id="dot"></span>
+    </div>
+  </div>
+</header>
+
+<!-- 标签切换 -->
+<div class="tabs" id="tabs">
+  <button class="tab active" data-tab="live">实况</button>
+  <button class="tab" data-tab="records">记录</button>
+</div>
+
+<!-- ══════════ 标签 1：实况 ══════════ -->
+<div class="tab-panel active" id="viewLive">
+
+  <div class="hero">
+    <div class="metric">
+      <span class="num" id="speedNum">0.0</span>
+      <span class="unit">km/h</span>
+    </div>
+    <div class="metric-label">当前速度</div>
+    <div class="sub">
+      <div><div class="v" id="inclineNum">0.0<span style="font-size:15px;font-weight:500;color:var(--text2)">%</span></div><div class="k">坡度</div></div>
+      <div><div class="v" id="rssiNum">—</div><div class="k">信号强度</div></div>
+    </div>
+  </div>
+
+  <div class="group-title">控制</div>
+  <div class="group">
+    <div class="actions">
+      <button class="btn primary" id="btnStart">
+        <svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/></svg>
+        启动
+      </button>
+      <button class="btn stop" id="btnStop">
+        <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none"/></svg>
+        停止
+      </button>
+      <button class="btn orange" id="btnPause">
+        <svg viewBox="0 0 24 24"><rect x="7" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="3.5" height="14" rx="1" fill="currentColor" stroke="none"/></svg>
+        暂停
+      </button>
+      <button class="btn blue" id="btnQuick">
+        <svg viewBox="0 0 24 24"><path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z" fill="currentColor" stroke="none"/></svg>
+        一键启动
+      </button>
+    </div>
+  </div>
+
+  <div class="group-title">设定</div>
+  <div class="group">
+    <div class="slider-row">
+      <div class="slider-head"><span class="name">速度</span><span class="val"><span id="spdSet">0.5</span> <span style="font-size:13px;font-weight:500;color:var(--text2)">km/h</span></span></div>
+      <input type="range" id="rngSpeed" min="0.5" max="14" step="0.1" value="0.5">
+      <div class="ticks"><span>0.5</span><span>7</span><span>14</span></div>
+    </div>
+    <div class="slider-row" style="border-top:1px solid var(--sep)">
+      <div class="slider-head"><span class="name">坡度</span><span class="val"><span id="incSet">0</span> <span style="font-size:13px;font-weight:500;color:var(--text2)">%</span></span></div>
+      <input type="range" id="rngIncline" min="0" max="15" step="1" value="0">
+      <div class="ticks"><span>0</span><span>7</span><span>15</span></div>
+    </div>
+  </div>
+
+  <div class="group-title">维护</div>
+  <div class="group">
+    <div class="row">
+      <div><div class="label">解锁</div><div class="hint">连接后通常已自动完成</div></div>
+      <button class="btn blue" id="btnUnlock">解锁</button>
+    </div>
+    <div class="row">
+      <div><div class="label">请求控制权</div><div class="hint">无法控制时手动点一下</div></div>
+      <button class="btn blue" id="btnRequest">请求</button>
+    </div>
+  </div>
+
+
+</div><!-- /viewLive -->
+
+<!-- ══════════ 标签 2：记录 ══════════ -->
+<div class="tab-panel" id="tabRecords">
+
+  <div class="stat" id="sessionLive" style="display:none;background:var(--card);border-radius:var(--radius);margin-bottom:14px">
+    <div class="k">正在记录<span class="sub2" id="sessionLiveInfo">—</span></div>
+    <div class="v" style="color:var(--green)">●</div>
+  </div>
+
+  <div id="recordsList">
+    <div class="group"><div class="stat"><div class="k" style="color:var(--text2)">还没有记录 · 跑起来会自动记录</div></div></div>
+  </div>
+
+  <div class="group" style="margin-top:14px">
+    <div class="stat" style="cursor:pointer" id="btnImport">
+      <div class="k">从历史数据导入<span class="sub2">从 ESP32 历史记录补录之前的跑步</span></div>
+      <div class="v" style="font-size:15px;color:var(--blue)">导入</div>
+    </div>
+  </div>
+
+  <div id="recordDetail" style="display:none"></div>
+
+</div><!-- /tabRecords -->
+
+<!-- ══════════ 视图 2：ESP32 ══════════ -->
+<div class="esp-view" id="viewEsp32">
+
+  <div class="group-title">系统</div>
+  <div class="group">
+    <div class="stat">
+      <div class="k">芯片温度<span class="sub2">ESP32-S3 核心温度</span></div>
+      <div class="v" id="vTemp">—<span class="u">°C</span></div>
+    </div>
+    <div class="stat">
+      <div class="k">运行时长<span class="sub2">自上次重启</span></div>
+      <div class="v" id="vUptime">—</div>
+    </div>
+    <div class="stat">
+      <div class="k">固件版本</div>
+      <div class="v" id="vVersion" style="font-size:14px">—</div>
+    </div>
+  </div>
+
+  <div class="group-title">内存</div>
+  <div class="group">
+    <div class="stat">
+      <div class="k">可用 RAM<span class="sub2" id="vMinFreeHint">历史最低 —</span></div>
+      <div class="v" id="vFreeRam">—</div>
+    </div>
+    <div class="stat">
+      <div class="k">最大连续块<span class="sub2">可用于大块分配</span></div>
+      <div class="v" id="vMaxBlock">—</div>
+    </div>
+    <div class="stat">
+      <div class="k">碎片率<span class="sub2">越低越好</span></div>
+      <div class="v" id="vFrag">—<span class="u">%</span></div>
+    </div>
+    <div class="stat">
+      <div class="k">可用 PSRAM<span class="sub2">总共 8 MB</span></div>
+      <div class="v" id="vPsram">—</div>
+    </div>
+  </div>
+
+  <div class="group-title">性能</div>
+  <div class="group">
+    <div class="stat">
+      <div class="k">主循环耗时<span class="sub2">正常应低于 30 ms</span></div>
+      <div class="v" id="vLoop">—<span class="u">ms</span></div>
+    </div>
+  </div>
+
+  <div class="group-title">网络</div>
+  <div class="group">
+    <div class="stat">
+      <div class="k">WiFi 信号</div>
+      <div class="v" id="vWifi">—<span class="u">dBm</span></div>
+    </div>
+    <div class="stat">
+      <div class="k">IP 地址</div>
+      <div class="v" id="vIp" style="font-size:14px;font-family:ui-monospace,monospace">—</div>
+    </div>
+  </div>
+
+  <div class="group-title">蓝牙</div>
+  <div class="group">
+    <div class="stat">
+      <div class="k">跑步机连接<span class="sub2">BLE 链路状态</span></div>
+      <div class="v" id="vBle">—</div>
+    </div>
+    <div class="stat">
+      <div class="k">跑步机信号</div>
+      <div class="v" id="vBleRssi">—<span class="u">dBm</span></div>
+    </div>
+  </div>
+
+</div><!-- /viewEsp32 -->
+
+<footer>
+  <div id="connInfo">—</div>
+  <div><code id="host"></code></div>
+</footer>
+
+<!-- Home 下拉菜单 -->
+<div class="menu-scrim" id="menuScrim"></div>
+<div class="menu" id="menu">
+  <div class="menu-item active" data-view="treadmill">
+    <svg viewBox="0 0 24 24"><path d="M4 17h16"/><path d="M6 17V9a3 3 0 016 0v8"/><path d="M12 13h4a3 3 0 013 3v1"/><circle cx="18.5" cy="7.5" r="1.8"/></svg>
+    跑步机
+    <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+  </div>
+  <div class="menu-item" data-view="esp32">
+    <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2.5"/><rect x="8.5" y="8.5" width="7" height="7" rx="1"/><path d="M9 1.5v2.5M15 1.5v2.5M9 20v2.5M15 20v2.5M1.5 9H4M20 9h2.5M1.5 15H4M20 15h2.5"/></svg>
+    ESP32
+    <svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  'use strict';
+  const $ = id => document.getElementById(id);
+  document.getElementById('host').textContent = location.host;
+
+  /* ══════ 状态 ══════ */
+  const state = {
+    connected:false, speed:0, incline:0, bleRssi:null,
+    temp:null, freeRam:null, minFreeRam:null, maxBlock:null,
+    frag:null, psram:null, loop:null, wifiRssi:null, uptime:null
+  };
+  let toastTimer = null;
+
+  function toast(msg, ms){
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), ms || 1800);
+  }
+
+  /* ══════ 网络 ══════ */
+  async function post(path, body){
+    const opt = { method:'POST', headers:{} };
+    if (body !== undefined){
+      opt.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      opt.body = body;
+    }
+    const r = await fetch(path, opt);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r;
+  }
+  async function pressButton(name){
+    try{ await post('/button/' + name + '/press'); return true; }
+    catch(e){ toast('操作失败：没有连接跑步机'); return false; }
+  }
+  let setTimer = { speed:null, incline:null };
+  function setNumber(name, value, key){
+    clearTimeout(setTimer[key]);
+    setTimer[key] = setTimeout(async () => {
+      try{ await post('/number/' + name + '/set', 'value=' + encodeURIComponent(value)); }
+      catch(e){ toast('设定失败'); }
+    }, 260);
+  }
+
+  /* ══════ 格式化 ══════ */
+  const fmtBytes = b => {
+    if (b === null || b === undefined) return '—';
+    if (b >= 1048576) return (b / 1048576).toFixed(2) + ' MB';
+    if (b >= 1024)    return Math.round(b / 1024) + ' KB';
+    return Math.round(b) + ' B';
+  };
+  const fmtUptime = s => {
+    if (s === null || s === undefined) return '—';
+    s = Math.floor(s);
+    const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600),
+          m = Math.floor(s % 3600 / 60), sec = s % 60;
+    if (d) return d + ' 天 ' + h + ' 小时';
+    if (h) return h + ' 小时 ' + m + ' 分';
+    if (m) return m + ' 分 ' + sec + ' 秒';
+    return sec + ' 秒';
+  };
+  const fmtRssi = v => (v === null || v === undefined) ? '—' : Math.round(v) + ' dBm';
+  const badge = (cls, txt) => '<span class="badge ' + cls + '">' + txt + '</span>';
+
+  /* ══════ 渲染 ══════ */
+  function renderTreadmill(){
+    const run = state.speed > 0.05;
+    const sn = $('speedNum');
+    sn.textContent = state.speed.toFixed(1);
+    sn.classList.toggle('run', run);
+    $('inclineNum').innerHTML = state.incline.toFixed(1) +
+      '<span style="font-size:15px;font-weight:500;color:var(--text2)">%</span>';
+    $('rssiNum').textContent = fmtRssi(state.bleRssi);
+
+    const dot = $('dot');
+    dot.className = 'dot ' + (state.connected ? 'on' : 'off');
+    $('statusPill').title = state.connected ? (run ? '运行中' : '已就绪') : '未连接';
+
+    $('connInfo').textContent = state.connected
+      ? (run ? '跑步机运行中 · ' + state.speed.toFixed(1) + ' km/h' : '跑步机已连接，待命')
+      : '跑步机未连接 — 请按面板按钮唤醒屏幕';
+
+    ['btnStart','btnStop','btnPause','btnQuick'].forEach(id => { $(id).disabled = !state.connected; });
+    $('rngSpeed').disabled = !state.connected;
+    $('rngIncline').disabled = !state.connected;
+  }
+
+  function renderEsp32(){
+    // 温度
+    if (state.temp === null) { $('vTemp').innerHTML = '—<span class="u">°C</span>'; }
+    else {
+      const t = state.temp;
+      const cls = t >= 70 ? 'bad' : (t >= 60 ? 'warn' : 'ok');
+      $('vTemp').innerHTML = t.toFixed(1) + '<span class="u">°C</span>' +
+        (t >= 60 ? badge(cls, cls === 'bad' ? '过热' : '偏高') : '');
+    }
+    $('vUptime').textContent = fmtUptime(state.uptime);
+    $('vFreeRam').textContent = fmtBytes(state.freeRam);
+    $('vMinFreeHint').textContent = '历史最低 ' + fmtBytes(state.minFreeRam);
+    $('vMaxBlock').textContent = fmtBytes(state.maxBlock);
+    $('vPsram').textContent = fmtBytes(state.psram);
+
+    if (state.frag === null) { $('vFrag').innerHTML = '—<span class="u">%</span>'; }
+    else {
+      const f = state.frag;
+      const cls = f >= 60 ? 'bad' : (f >= 40 ? 'warn' : 'ok');
+      $('vFrag').innerHTML = f.toFixed(1) + '<span class="u">%</span>' +
+        (f >= 40 ? badge(cls, cls === 'bad' ? '严重' : '偏高') : '');
+    }
+
+    if (state.loop === null) { $('vLoop').innerHTML = '—<span class="u">ms</span>'; }
+    else {
+      const l = state.loop;
+      const cls = l >= 100 ? 'bad' : (l >= 50 ? 'warn' : 'ok');
+      $('vLoop').innerHTML = l.toFixed(0) + '<span class="u">ms</span>' +
+        (l >= 50 ? badge(cls, cls === 'bad' ? '过载' : '偏高') : '');
+    }
+
+    if (state.wifiRssi === null) { $('vWifi').innerHTML = '—'; }
+    else {
+      const w = state.wifiRssi;
+      const cls = w >= -60 ? 'ok' : (w >= -75 ? 'warn' : 'bad');
+      $('vWifi').innerHTML = Math.round(w) + '<span class="u">dBm</span>' + badge(cls, w >= -60 ? '强' : (w >= -75 ? '中' : '弱'));
+    }
+
+    $('vIp').textContent = location.hostname;
+    $('vBle').innerHTML = state.connected
+      ? badge('ok', '已连接')
+      : badge('bad', '未连接');
+    $('vBleRssi').innerHTML = state.bleRssi === null
+      ? '—'
+      : Math.round(state.bleRssi) + '<span class="u">dBm</span>';
+
+    if ($('viewEsp32').classList.contains('active')){
+      $('dot').className = 'dot ' + (state.uptime === null ? '' : 'on');
+      $('statusPill').title = state.uptime === null ? '读取中…' : '在线';
+    }
+  }
+
+  function render(){
+    if (currentTab === 'records') return;
+    if ($('viewEsp32').classList.contains('active')) renderEsp32();
+    else renderTreadmill();
+  }
+
+  /* ══════ SSE ══════ */
+  const MAP = {
+    'sensor/treadmill_current_speed':   v => state.speed = parseFloat(v) || 0,
+    'sensor/treadmill_current_incline': v => state.incline = parseFloat(v) || 0,
+    'sensor/treadmill_rssi':            v => state.bleRssi = (v === null ? null : parseFloat(v)),
+    'binary_sensor/treadmill_connected':v => state.connected = (v === true || v === 'ON'),
+    'sensor/esp32_chip_temp':           v => state.temp = (v === null ? null : parseFloat(v)),
+    'sensor/esp32_free_ram':            v => state.freeRam = (v === null ? null : parseFloat(v)),
+    'sensor/esp32_min_free_ram':        v => state.minFreeRam = (v === null ? null : parseFloat(v)),
+    'sensor/esp32_max_block':           v => state.maxBlock = (v === null ? null : parseFloat(v)),
+    'sensor/esp32_ram_fragmentation':   v => state.frag = (v === null ? null : parseFloat(v)),
+    'sensor/esp32_free_psram':          v => state.psram = (v === null ? null : parseFloat(v)),
+    'sensor/esp32_loop_time':           v => state.loop = (v === null ? null : parseFloat(v)),
+    'sensor/esp32_wifi_rssi':           v => state.wifiRssi = (v === null ? null : parseFloat(v)),
+    'sensor/esp32_uptime':              v => state.uptime = (v === null ? null : parseFloat(v))
+  };
+
+  function handleState(ev){
+    let d;
+    try{ d = JSON.parse(ev); }catch(e){ return; }
+    const id = d.id || '';
+
+    const fn = MAP[id];
+    if (fn){ fn(d.value); render(); return; }
+
+    // number 控件回显
+    if (id === 'number/treadmill_speed' && d.value !== null){
+      const v = parseFloat(d.value);
+      if (!isNaN(v)){
+        $('spdSet').textContent = v.toFixed(1);
+        if (document.activeElement !== $('rngSpeed')) $('rngSpeed').value = v;
+      }
+    } else if (id === 'number/treadmill_incline' && d.value !== null){
+      const v = parseFloat(d.value);
+      if (!isNaN(v)){
+        $('incSet').textContent = Math.round(v);
+        if (document.activeElement !== $('rngIncline')) $('rngIncline').value = v;
+      }
+    }
+  }
+
+  let es = null, retry = 0;
+  function connect(){
+    if (es) es.close();
+    es = new EventSource('/events');
+    es.addEventListener('state', e => handleState(e.data));
+    es.onopen = () => { retry = 0; };
+    es.onerror = () => {
+      state.connected = false;
+      $('dot').className = 'dot off';
+      $('statusPill').title = '已断开，重连中…';
+      $('connInfo').textContent = '与 ESP32 的连接断开，正在重试…';
+      es.close();
+      retry = Math.min(retry + 1, 6);
+      setTimeout(connect, 800 * retry);
+    };
+  }
+
+  /* ══════ Home 菜单 ══════ */
+  const menu = $('menu'), scrim = $('menuScrim'), homeBtn = $('homeBtn');
+  let menuOpen = false;
+
+  function openMenu(){
+    const r = homeBtn.getBoundingClientRect();
+    menu.style.left = Math.min(r.left, window.innerWidth - 228) + 'px';
+    menu.style.top  = (r.bottom + 8) + 'px';
+    menu.classList.add('show');
+    scrim.classList.add('show');
+    menuOpen = true;
+  }
+  function closeMenu(){
+    menu.classList.remove('show');
+    scrim.classList.remove('show');
+    menuOpen = false;
+  }
+  // 只用 click，避免 pointerdown + click 双触发导致状态翻转
+  homeBtn.addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    menuOpen ? closeMenu() : openMenu();
+  });
+  scrim.addEventListener('click', closeMenu);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+  window.addEventListener('resize', () => { if (menuOpen) closeMenu(); });
+
+  document.querySelectorAll('.menu-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const v = item.dataset.view;
+      document.querySelectorAll('.menu-item').forEach(i => i.classList.toggle('active', i === item));
+      // ESP32 视图是「实况」标签下的子视图
+      $('#viewLive').classList.remove('active');
+      $('#viewEsp32').classList.remove('active');
+      if (v === 'esp32'){
+        $('#viewEsp32').classList.add('active');
+        $('pageTitle').textContent = 'ESP32';
+      } else {
+        $('#viewLive').classList.add('active');
+        $('pageTitle').textContent = '跑步机';
+      }
+      closeMenu();
+      render();
+    });
+  });
+
+  /* ══════ 交互绑定 ══════ */
+  $('btnStart').onclick = () => pressButton('treadmill_start').then(ok => ok && toast('已发送启动'));
+  $('btnStop').onclick  = () => pressButton('treadmill_stop').then(ok => ok && toast('已发送停止'));
+  $('btnPause').onclick = () => pressButton('treadmill_pause').then(ok => ok && toast('已发送暂停'));
+  $('btnQuick').onclick = () => pressButton('treadmill_quick_start').then(ok => ok && toast('一键启动已发送'));
+  $('btnUnlock').onclick  = () => pressButton('treadmill_unlock').then(ok => ok && toast('已解锁'));
+  $('btnRequest').onclick = () => pressButton('treadmill_request_control').then(ok => ok && toast('已请求控制权'));
+
+  $('rngSpeed').oninput = e => {
+    const v = parseFloat(e.target.value);
+    $('spdSet').textContent = v.toFixed(1);
+    setNumber('treadmill_speed', v, 'speed');
+  };
+  $('rngIncline').oninput = e => {
+    const v = parseFloat(e.target.value);
+    $('incSet').textContent = Math.round(v);
+    setNumber('treadmill_incline', v, 'incline');
+  };
+
+  /* ══════ 标签切换 ══════ */
+  let currentTab = 'live';
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
+      currentTab = btn.dataset.tab;
+      document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+      document.getElementById(currentTab === 'records' ? 'tabRecords' : 'viewLive').classList.add('active');
+      if (currentTab === 'records') renderRecords();
+      render();
+    };
+  });
+
+  /* ══════ 运行记录（按变动片段记录）══════ */
+  const STORE_KEY = 'treadmill_runs_v2';
+  const CUR_KEY   = 'treadmill_current_run_v2';
+
+  const START_SPEED = 0.5;      // 速度 > 0.5 视为在跑
+  const START_HOLD  = 3000;     // 持续 3 秒才算开始
+  const END_HOLD    = 120000;   // 停止 2 分钟算结束
+  const CHANGE_GAP  = 60000;    // 1 分钟内的多次变动合并为一条
+  const MAX_RUNS    = 100;
+
+  const runs = {
+    list: [],
+    cur: null,          // { start, segments: [{t, speed, incline, fromSpeed, fromIncline}] }
+    movingSince: 0,
+    stoppedSince: 0,
+  };
+
+  function loadRuns(){
+    try { runs.list = JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(e){ runs.list = []; }
+    try {
+      const c = JSON.parse(localStorage.getItem(CUR_KEY) || 'null');
+      if (c && c.start) runs.cur = c;
+    } catch(e){}
+  }
+  function saveRuns(){
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(runs.list.slice(0, MAX_RUNS))); } catch(e){}
+  }
+  function saveCur(){
+    try {
+      if (runs.cur) localStorage.setItem(CUR_KEY, JSON.stringify(runs.cur));
+      else localStorage.removeItem(CUR_KEY);
+    } catch(e){}
+  }
+
+  function startRun(ts){
+    runs.cur = { start: ts, end: null, segments: [] };
+    addSegment(ts, 0, 0, null, null);   // 起步片段
+    saveCur();
+  }
+
+  // 加一个变动片段。fromX 为 null 表示起步
+  function addSegment(ts, speed, incline, fromSpeed, fromIncline){
+    if (!runs.cur) return;
+    runs.cur.segments.push({
+      t: ts,
+      speed: +speed.toFixed(1),
+      incline: +incline.toFixed(1),
+      fromSpeed: fromSpeed === null ? null : +fromSpeed.toFixed(1),
+      fromIncline: fromIncline === null ? null : +fromIncline.toFixed(1),
+    });
+    saveCur();
+  }
+
+  // 检测速度/坡度变化，决定是否新增片段
+  function checkChange(){
+    if (!runs.cur) return;
+    const segs = runs.cur.segments;
+    const last = segs[segs.length - 1];
+    const now = Date.now();
+
+    const spdChanged = Math.abs(state.speed - last.speed) >= 0.2;
+    const incChanged = Math.abs(state.incline - last.incline) >= 0.5;
+    if (!spdChanged && !incChanged) return;
+
+    // 1 分钟内合并：直接更新最后一个片段的目标值
+    if (now - last.t <= CHANGE_GAP){
+      if (spdChanged) last.speed = +state.speed.toFixed(1);
+      if (incChanged) last.incline = +state.incline.toFixed(1);
+      saveCur();
+    } else {
+      // 超过 1 分钟，新建一条片段
+      addSegment(now, state.speed, state.incline, last.speed, last.incline);
+    }
+  }
+
+  function finishRun(ts){
+    if (!runs.cur) return;
+    runs.cur.end = ts;
+    runs.list.unshift(runs.cur);
+    saveRuns();
+    runs.cur = null;
+    saveCur();
+    renderRecords();
+  }
+
+  function tickRun(){
+    const now = Date.now();
+    const moving = state.speed > START_SPEED;
+
+    if (moving){
+      runs.stoppedSince = 0;
+      if (!runs.cur){
+        if (!runs.movingSince) runs.movingSince = now;
+        if (now - runs.movingSince >= START_HOLD) startRun(runs.movingSince);
+      } else {
+        checkChange();
+      }
+    } else {
+      runs.movingSince = 0;
+      if (runs.cur){
+        if (!runs.stoppedSince) runs.stoppedSince = now;
+        if (now - runs.stoppedSince >= END_HOLD) finishRun(runs.stoppedSince);
+      }
+    }
+    renderLiveBadge();
+  }
+
+  /* ── 渲染 ── */
+  const p2 = n => String(n).padStart(2,'0');
+  function fmtDur(sec){
+    const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = Math.round(sec%60);
+    if (h) return h + ' 小时 ' + m + ' 分';
+    if (m) return m + ' 分';
+    return s + ' 秒';
+  }
+  function fmtClock(ts){
+    const d = new Date(ts);
+    return p2(d.getHours()) + ':' + p2(d.getMinutes());
+  }
+  function fmtDay(ts){
+    const d = new Date(ts);
+    const today = new Date();
+    if (d.toDateString() === today.toDateString()) return '今天';
+    const y = new Date(today); y.setDate(y.getDate()-1);
+    if (d.toDateString() === y.toDateString()) return '昨天';
+    return (d.getMonth()+1) + '月' + d.getDate() + '日';
+  }
+
+  function renderLiveBadge(){
+    const el = $('sessionLive');
+    if (!el) return;
+    if (runs.cur){
+      const dur = (Date.now() - runs.cur.start)/1000;
+      el.style.display = '';
+      $('sessionLiveInfo').textContent =
+        fmtDur(dur) + ' · ' + state.speed.toFixed(1) + ' km/h · ' + state.incline.toFixed(0) + '%';
+      if (currentTab === 'records') clearTimeout(renderLiveBadge._t), renderLiveBadge._t = setTimeout(renderLiveBadge, 1000);
+    } else {
+      el.style.display = 'none';
+    }
+  }
+
+  function runSummary(r){
+    const dur = (r.end - r.start)/1000;
+    // 粗略估算距离：每段用该段速度 × 持续时间
+    let dist = 0;
+    for (let i = 0; i < r.segments.length; i++){
+      const s = r.segments[i];
+      const next = r.segments[i+1];
+      const endT = next ? next.t : r.end;
+      dist += s.speed * ((endT - s.t) / 3600000);
+    }
+    return { dur, dist: +dist.toFixed(2) };
+  }
+
+  function renderRecords(){
+    const box = $('recordsList');
+    if (!box) return;
+    if (!runs.list.length){
+      box.innerHTML = '<div class="group"><div class="stat"><div class="k" style="color:var(--text2)">还没有记录 · 跑起来会自动记录</div></div></div>';
+      $('recordDetail').style.display = 'none';
+      return;
+    }
+    box.innerHTML = runs.list.map((r, idx) => {
+      const { dur, dist } = runSummary(r);
+      return `<div class="group" style="margin-bottom:10px">
+        <div class="stat" style="cursor:pointer" data-run="${idx}">
+          <div class="k">${fmtDay(r.start)} ${fmtClock(r.start)}<span class="sub2">${fmtDur(dur)} · ${dist} km · ${r.segments.length} 段</span></div>
+          <div class="v" style="font-size:15px;color:var(--blue)">›</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    box.querySelectorAll('[data-run]').forEach(el => {
+      el.onclick = () => showRunDetail(+el.dataset.run);
+    });
+    $('recordDetail').style.display = 'none';
+  }
+
+  function showRunDetail(idx){
+    const r = runs.list[idx];
+    if (!r) return;
+    const { dur, dist } = runSummary(r);
+    const endT = r.end;
+
+    // 时间线
+    const items = r.segments.map((s, i) => {
+      const next = r.segments[i+1];
+      const segEnd = next ? next.t : endT;
+      const segDur = (segEnd - s.t)/1000;
+
+      let main = `速度 ${s.speed.toFixed(1)} km/h · 坡度 ${s.incline.toFixed(0)}%`;
+      let delta = '';
+      const spdDiff = s.fromSpeed !== null && Math.abs(s.fromSpeed - s.speed) >= 0.2;
+      const incDiff = s.fromIncline !== null && Math.abs(s.fromIncline - s.incline) >= 0.5;
+      if (spdDiff || incDiff){
+        const parts = [];
+        if (spdDiff) parts.push(`速度 ${s.fromSpeed.toFixed(1)} <span class="arrow">→</span> ${s.speed.toFixed(1)}`);
+        if (incDiff) parts.push(`坡度 ${s.fromIncline.toFixed(0)} <span class="arrow">→</span> ${s.incline.toFixed(0)}`);
+        delta = `<div class="tl-delta">${parts.join(' · ')}</div>`;
+      } else if (i === 0){
+        delta = '<div class="tl-delta">起步</div>';
+      }
+      return `<div class="tl-item">
+        <div class="tl-time">${fmtClock(s.t)} · 持续 ${fmtDur(segDur)}</div>
+        <div class="tl-main">${main}</div>
+        ${delta}
+      </div>`;
+    }).join('');
+
+    const header = `<div class="group" style="margin-bottom:14px">
+      <div class="stat"><div class="k">开始</div><div class="v" style="font-size:15px">${fmtDay(r.start)} ${fmtClock(r.start)}</div></div>
+      <div class="stat"><div class="k">时长</div><div class="v" style="font-size:15px">${fmtDur(dur)}</div></div>
+      <div class="stat"><div class="k">距离</div><div class="v" style="font-size:15px">${dist} km</div></div>
+      <div class="stat"><div class="k">变动</div><div class="v" style="font-size:15px">${r.segments.length} 段</div></div>
+    </div>`;
+
+    $('recordDetail').innerHTML = `
+      <div class="group-title">运行明细</div>
+      ${header}
+      <div class="group"><div style="padding:8px 16px 16px">
+        <div class="timeline">${items}</div>
+      </div></div>
+      <div class="group"><div class="stat" style="cursor:pointer">
+        <div class="k" style="color:var(--red)" id="delRun">删除这条记录</div><div class="v"></div>
+      </div></div>`;
+    $('recordDetail').style.display = '';
+
+    $('delRun').onclick = () => {
+      if (confirm('确定删除这条记录？')){
+        runs.list.splice(idx, 1);
+        saveRuns();
+        renderRecords();
+      }
+    };
+    $('recordDetail').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  /* ══════ 从历史导入（走 HA）══════ */
+  async function fetchHistory(entity, startISO){
+    const r = await fetch('/ha/history?entity=' + encodeURIComponent(entity) + '&start=' + encodeURIComponent(startISO));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    return (d && d[0]) ? d[0] : [];
+  }
+
+  function parseSeries(pts){
+    const out = [];
+    for (const p of pts){
+      const v = parseFloat(p.state);
+      if (isNaN(v)) continue;
+      const t = new Date(p.last_changed || p.lu).getTime();
+      if (isNaN(t)) continue;
+      out.push([t, v]);
+    }
+    out.sort((a,b) => a[0] - b[0]);
+    return out;
+  }
+  function valueAt(series, t){
+    let v = 0;
+    for (const [ts, val] of series){ if (ts <= t) v = val; else break; }
+    return v;
+  }
+
+  async function importFromHistory(){
+    const btn = $('btnImport');
+    if (btn){ btn.style.opacity = '0.5'; }
+    toast('正在导入…', 2000);
+    try {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const startISO = today.toISOString().replace('.000Z','+00:00');
+
+      const [spdPts, incPts] = await Promise.all([
+        fetchHistory('sensor.yang_tai_pao_bu_ji_treadmill_current_speed', startISO),
+        fetchHistory('sensor.yang_tai_pao_bu_ji_treadmill_current_incline', startISO),
+      ]);
+      const S = parseSeries(spdPts), I = parseSeries(incPts);
+      if (!S.length){ toast('没有历史数据'); return; }
+
+      // 找跑步段
+      const found = [];
+      let cur = null;
+      for (const [t, v] of S){
+        if (v > START_SPEED){
+          if (!cur) cur = { start: t, pts: [] };
+          cur.pts.push([t, v]);
+        } else if (cur){
+          cur.end = t; found.push(cur); cur = null;
+        }
+      }
+      if (cur){ cur.end = S[S.length-1][0]; found.push(cur); }
+
+      // 已有记录的 start 集合（去重）
+      const existing = new Set(runs.list.map(r => Math.floor(r.start/1000)));
+
+      let added = 0;
+      for (const r of found){
+        if ((r.end - r.start)/1000 < 10) continue;      // 太短忽略
+        if (existing.has(Math.floor(r.start/1000))) continue;   // 已存在
+
+        const segs = [];
+        let prevS = r.pts[0][1];
+        let prevI = valueAt(I, r.start);
+        let lastT = r.start;
+        segs.push({t: r.start, speed: +prevS.toFixed(1), incline: +prevI.toFixed(1), fromSpeed: null, fromIncline: null});
+
+        // 坡度变化
+        for (const [t, v] of I){
+          if (t <= r.start || t >= r.end) continue;
+          if (Math.abs(v - prevI) < 0.5) continue;
+          const spdNow = valueAt(S, t);
+          if (t - lastT <= CHANGE_GAP){
+            segs[segs.length-1].incline = +v.toFixed(1);
+            segs[segs.length-1].speed = +spdNow.toFixed(1);
+          } else {
+            segs.push({t, speed: +spdNow.toFixed(1), incline: +v.toFixed(1),
+                       fromSpeed: +prevS.toFixed(1), fromIncline: +prevI.toFixed(1)});
+            lastT = t;
+          }
+          prevI = v; prevS = spdNow;
+        }
+        // 速度变化
+        for (const [t, v] of r.pts){
+          if (t <= r.start) continue;
+          if (Math.abs(v - prevS) < 0.2) continue;
+          const incNow = valueAt(I, t);
+          if (t - lastT <= CHANGE_GAP){
+            segs[segs.length-1].speed = +v.toFixed(1);
+            segs[segs.length-1].incline = +incNow.toFixed(1);
+          } else {
+            segs.push({t, speed: +v.toFixed(1), incline: +incNow.toFixed(1),
+                       fromSpeed: +prevS.toFixed(1), fromIncline: +prevI.toFixed(1)});
+            lastT = t;
+          }
+          prevS = v; prevI = incNow;
+        }
+
+        runs.list.push({ start: r.start, end: r.end, segments: segs, _imported: true });
+        added++;
+      }
+
+      runs.list.sort((a,b) => b.start - a.start);
+      saveRuns();
+      renderRecords();
+      toast(added ? `已导入 ${added} 条记录` : '没有新记录', 2500);
+    } catch(e){
+      console.error(e);
+      toast('导入失败：' + e.message, 3000);
+    } finally {
+      if (btn){ btn.style.opacity = ''; }
+    }
+  }
+  const btnImportEl = $('btnImport');
+  if (btnImportEl) btnImportEl.onclick = importFromHistory;
+
+  loadRuns();
+  renderRecords();
+  renderLiveBadge();
+  setInterval(tickRun, 1000);
+
+  render();
+  connect();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) connect(); });
+})();
+</script>
+</body>
+</html>

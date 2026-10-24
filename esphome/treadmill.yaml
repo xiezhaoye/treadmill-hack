@@ -17,8 +17,8 @@
 
 substitutions:
   # ===== <<< 需要你修改 >>> =====
-  treadmill_mac: "AA:BB:CC:DD:EE:FF"        # 你的跑步机 MAC（大小写不敏感）
-  unlock_code: "0123456789ABCDEF"           # 解锁码（从 App 数据或二维码获取）
+  treadmill_mac: !secret treadmill_mac        # 你的跑步机 MAC（大小写不敏感）
+  unlock_code: !secret unlock_code           # 解锁码（从 App 数据或二维码获取）
 
   # 设备名（会出现在 HA 里）
   device_name: "balcony-treadmill"
@@ -28,9 +28,19 @@ substitutions:
   oled_sda: "GPIO8"
   oled_scl: "GPIO9"
 
+# 把十六进制字符串转成字节数组（ESPHome 2026.x 移除了 ble_client::hex_to_bytes）
+# 本地外部组件（跑步机 0x2ACD 原始字节解析）
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [treadmill]
+
 esphome:
   name: ${device_name}
   friendly_name: "阳台跑步机"
+  includes:
+    - hex_helper.h
   # 解锁后需要 2 秒等待，用 on_boot 做初始化
   on_boot:
     priority: -100
@@ -70,11 +80,16 @@ wifi:
 captive_portal:
 
 logger:
-  level: INFO
+  level: DEBUG
+  # ESP32-S3 原生 USB 口的日志通道（否则日志走 UART0，USB 口收不到）
+  hardware_uart: USB_CDC
   logs:
     esp32_ble_tracker: WARN
     ble_client: DEBUG
     component: WARN
+    bluetooth_proxy: DEBUG
+    # 自定义组件日志（必须显式声明，否则被 component:WARN 兜底压制）
+    treadmill: DEBUG
 
 api:
   encryption:
@@ -87,23 +102,57 @@ ota:
 # ===========================================================================
 # BLE 部分
 # ===========================================================================
+# bluetooth_proxy + ble_client 共用，需要足够连接槽位
+esp32_ble:
+  max_connections: 6
+
 esp32_ble_tracker:
   scan_parameters:
     interval: 320ms
     window: 160ms
     active: true
 
+# 暴露 BLE 扫描结果给 API，便于诊断（同时也给 Home Assistant 当蓝牙代理用）
+debug:
+  update_interval: 60s
+
+bluetooth_proxy:
+  active: true
+
 ble_client:
   - mac_address: ${treadmill_mac}
     id: tm
-    # 连接后自动发现服务
+    # 连接后自动完成握手：等待服务发现 -> 写解锁码 -> 等 2 秒 -> 请求控制权
+    #
+    # 为什么要等：
+    #   - 服务发现完成后才能写特征值，所以先 delay
+    #   - 写解锁码后跑步机会重置 GATT 会话，必须等 2 秒再发下一条
     on_connect:
       then:
-        - logger.log: "跑步机已连接"
+        - logger.log: "跑步机已连接，2 秒后自动解锁"
         - lambda: |-
             id(tm_connected) = true;
-            // 解锁流程：连接后 1 秒写解锁码
-            id(unlock_pending) = true;
+        - delay: 2s
+        # ---- 1. 写解锁码 ----
+        - lambda: |-
+            ESP_LOGI("treadmill", "[自动] 写解锁码");
+        - ble_client.ble_write:
+            id: tm
+            service_uuid: "00001826-0000-1000-8000-00805f9b34fb"
+            characteristic_uuid: "d18d2c10-c44c-11e8-a355-529269fb1459"
+            value: !lambda 'return tm_hex_to_bytes("${unlock_code}");'
+        # ---- 2. 等跑步机重置 GATT 会话 ----
+        - delay: 2s
+        # ---- 3. 请求控制权 ----
+        - lambda: |-
+            ESP_LOGI("treadmill", "[自动] 请求控制权");
+        - ble_client.ble_write:
+            id: tm
+            service_uuid: "00001826-0000-1000-8000-00805f9b34fb"
+            characteristic_uuid: "00002ad9-0000-1000-8000-00805f9b34fb"
+            value: [0x00]
+        - delay: 500ms
+        - logger.log: "自动握手完成，可以启动跑步机了"
     on_disconnect:
       then:
         - logger.log: "跑步机断开"
@@ -137,7 +186,7 @@ globals:
 button:
   # ---- 解锁（关键是第一步！）----
   - platform: template
-    name: "跑步机 解锁"
+    name: "treadmill_unlock"
     id: btn_unlock
     icon: mdi:lock-open
     on_press:
@@ -153,11 +202,11 @@ button:
           characteristic_uuid: "d18d2c10-c44c-11e8-a355-529269fb1459"
           value: !lambda |-
             // 把 unlock_code 字符串转成字节数组
-            return esphome::ble_client::hex_to_bytes("${unlock_code}");
+            return tm_hex_to_bytes("${unlock_code}");
 
   # ---- 请求控制权（00）----
   - platform: template
-    name: "跑步机 请求控制"
+    name: "treadmill_request_control"
     id: btn_request_control
     icon: mdi:account-key
     on_press:
@@ -169,7 +218,7 @@ button:
 
   # ---- 启动（07）----
   - platform: template
-    name: "跑步机 启动"
+    name: "treadmill_start"
     id: btn_start
     icon: mdi:play
     on_press:
@@ -181,7 +230,7 @@ button:
 
   # ---- 暂停（0802）----
   - platform: template
-    name: "跑步机 暂停"
+    name: "treadmill_pause"
     id: btn_pause
     icon: mdi:pause
     on_press:
@@ -193,7 +242,7 @@ button:
 
   # ---- 停止（0801）----
   - platform: template
-    name: "跑步机 停止"
+    name: "treadmill_stop"
     id: btn_stop
     icon: mdi:stop
     on_press:
@@ -205,7 +254,7 @@ button:
 
   # ---- 一键启动（解锁+控制+启动）----
   - platform: template
-    name: "跑步机 一键启动"
+    name: "treadmill_quick_start"
     id: btn_quick_start
     icon: mdi:rocket-launch
     on_press:
@@ -213,7 +262,7 @@ button:
           id: tm
           service_uuid: "00001826-0000-1000-8000-00805f9b34fb"
           characteristic_uuid: "d18d2c10-c44c-11e8-a355-529269fb1459"
-          value: !lambda 'return esphome::ble_client::hex_to_bytes("${unlock_code}");'
+          value: !lambda 'return tm_hex_to_bytes("${unlock_code}");'
       - delay: 2s
       - ble_client.ble_write:
           id: tm
@@ -232,7 +281,7 @@ button:
 # ===========================================================================
 number:
   - platform: template
-    name: "跑步机 速度"
+    name: "treadmill_speed"
     id: num_speed
     icon: mdi:speedometer
     unit_of_measurement: "km/h"
@@ -255,7 +304,7 @@ number:
             return {0x02, (uint8_t)(v & 0xFF), (uint8_t)(v >> 8)};
 
   - platform: template
-    name: "跑步机 坡度"
+    name: "treadmill_incline"
     id: num_incline
     icon: mdi:slope-uphill
     unit_of_measurement: "%"
@@ -281,66 +330,85 @@ number:
 # 实时数据（订阅 0x2ACD）
 # ===========================================================================
 sensor:
-  - platform: ble_client
-    type: characteristic
+  # 跑步机实时数据（外部组件 components/treadmill，解析 0x2ACD 原始字节）
+  - platform: treadmill
     ble_client_id: tm
-    service_uuid: "00001826-0000-1000-8000-00805f9b34fb"
-    characteristic_uuid: "00002acd-0000-1000-8000-00805f9b34fb"
-    name: "跑步机 原始数据"
-    id: tm_raw
-    notify: true
-    internal: true
-    on_value:
-      - lambda: |-
-          // 数据帧格式（实测 YPOO M5，其他机型需重新核对）:
-          //   9c25 <speed:2> <incline:2> 0000 00ff7f ...
-          //         offset 0-1: 帧头 9c25
-          //         offset 2-3: 速度 ×100 小端
-          //         offset 4-5: 坡度 ×10 小端
-          if (x.size() < 6) return;
-          uint16_t raw_speed = x[2] | (x[3] << 8);
-          uint16_t raw_incline = x[4] | (x[5] << 8);
-          float spd = raw_speed / 100.0f;
-          float inc = raw_incline / 10.0f;
-          if (fabsf(spd - id(tm_speed_kmh)) > 0.01f) {
-            ESP_LOGD("treadmill", "速度 %.2f -> %.2f", id(tm_speed_kmh), spd);
-            id(tm_speed_kmh) = spd;
-            id(sensor_speed).publish_state(spd);
-          }
-          if (fabsf(inc - id(tm_incline_pct)) > 0.05f) {
-            id(tm_incline_pct) = inc;
-            id(sensor_incline).publish_state(inc);
-          }
-
-  - platform: template
-    name: "跑步机 当前速度"
-    id: sensor_speed
-    icon: mdi:speedometer
-    unit_of_measurement: "km/h"
-    accuracy_decimals: 2
-    update_interval: never
-
-  - platform: template
-    name: "跑步机 当前坡度"
-    id: sensor_incline
-    icon: mdi:slope-uphill
-    unit_of_measurement: "%"
-    accuracy_decimals: 1
-    update_interval: never
+    speed:
+      name: "treadmill_current_speed"
+      id: sensor_speed
+    incline:
+      name: "treadmill_current_incline"
+      id: sensor_incline
+    distance:
+      name: "treadmill_current_distance"
+      id: sensor_distance
 
   # RSSI（信号强度，判断跑步机离 ESP32 多远）
   - platform: ble_client
     type: rssi
     ble_client_id: tm
-    name: "跑步机 信号强度"
+    name: "treadmill_rssi"
     icon: mdi:signal
+
+  # =========================================================================
+  # ESP32 板载状态（诊断用）
+  # =========================================================================
+  - platform: internal_temperature
+    name: "esp32_chip_temp"
+    id: esp32_chip_temp
+    icon: mdi:thermometer
+    accuracy_decimals: 1
+    update_interval: 60s
+
+  - platform: debug
+    free:
+      name: "esp32_free_ram"
+      id: esp32_free_ram
+    block:
+      name: "esp32_max_block"
+      id: esp32_max_block
+    min_free:
+      name: "esp32_min_free_ram"
+      id: esp32_min_free_ram
+    fragmentation:
+      name: "esp32_ram_fragmentation"
+      id: esp32_ram_fragmentation
+    loop_time:
+      name: "esp32_loop_time"
+      id: esp32_loop_time
+    psram:
+      name: "esp32_free_psram"
+      id: esp32_free_psram
+
+  - platform: wifi_signal
+    name: "esp32_wifi_rssi"
+    id: esp32_wifi_rssi
+    update_interval: 60s
+    accuracy_decimals: 0
+
+  - platform: uptime
+    name: "esp32_uptime"
+    id: esp32_uptime
+    update_interval: 60s
+
+  # 供电电压：需要外接分压电阻才能测（USB 5V --100k-- GPIO1 --100k-- GND）
+  # 未接线时读数无意义，所以默认注释掉。接线后取消注释即可。
+  # - platform: adc
+  #   pin: GPIO1
+  #   name: "esp32_supply_voltage"
+  #   attenuation: 12db
+  #   update_interval: 60s
+  #   accuracy_decimals: 2
+  #   unit_of_measurement: "V"
+  #   filters:
+  #     - multiply: 2.0
 
 # ===========================================================================
 # 连接状态（binary_sensor）
 # ===========================================================================
 binary_sensor:
   - platform: template
-    name: "跑步机 已连接"
+    name: "treadmill_connected"
     id: sensor_connected
     device_class: connectivity
     lambda: |-
@@ -374,8 +442,13 @@ display:
       if (id(tm_connected)) {
         it.printf(0, 16, id(font_lg), "%.1f km/h", id(tm_speed_kmh));
         it.printf(0, 38, id(font_md), "Incline %.0f%%", id(tm_incline_pct));
-        it.printf(0, 52, id(font_md), "WiFi %d dBm", (int)WiFi.RSSI());
+        it.printf(0, 52, id(font_md), "WiFi %d dBm", (int)wifi::global_wifi_component->wifi_rssi());
       } else {
         it.printf(0, 20, id(font_md), "Disconnected");
-        it.printf(0, 36, id(font_md), "WiFi %d dBm", (int)WiFi.RSSI());
+        it.printf(0, 36, id(font_md), "WiFi %d dBm", (int)wifi::global_wifi_component->wifi_rssi());
       }
+
+# 临时诊断用 Web 服务（可浏览器看日志）
+web_server:
+  port: 80
+  version: 3
